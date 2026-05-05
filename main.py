@@ -5,10 +5,14 @@ from tkinter import filedialog
 from gemini_extractor import extract_data_from_documents
 from web_filler import start_auto_fill
 
+# === استدعاء نظام التراخيص ===
+import license_manager
+
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
 
 class PrintRedirector:
+    """كلاس لتوجيه أوامر print لتظهر داخل واجهة البرنامج (TextBox)"""
     def __init__(self, textbox):
         self.textbox = textbox
 
@@ -51,10 +55,43 @@ class App(ctk.CTk):
         self.status_box.insert("0.0", "البرنامج متصل بالذكاء الاصطناعي. اختر الموقع واضغط بدء...\n")
         self.status_box.configure(state="disabled")
 
+        # توجيه مخرجات الطباعة (print) إلى صندوق النصوص
         sys.stdout = PrintRedirector(self.status_box)
 
         self.start_button = ctk.CTkButton(self, text="📂 اختيار الوثائق وبدء العمل", command=self.start_thread, font=("Arial", 16, "bold"), height=45)
         self.start_button.pack(pady=10)
+
+        # ===============================================
+        # نظام القفل والترخيص (License Manager Integration)
+        # ===============================================
+        if license_manager.verify_saved_key():
+            # إذا كان المفتاح صالحاً، لا تفعل شيئاً (البرنامج يعمل طبيعياً)
+            pass 
+        else:
+            # إذا لم يكن هناك مفتاح صالح، ابدأ مؤقت الفترة التجريبية (5 ثواني)
+            license_manager.start_trial_timer(self, self.lock_application)
+
+    def lock_application(self):
+        """دالة تقييد الواجهة وإظهار نافذة الشراء"""
+        # 1. تعطيل جميع أزرار التفاعل في الواجهة
+        self.start_button.configure(state="disabled")
+        self.site_menu.configure(state="disabled")
+        self.mode_menu.configure(state="disabled")
+        print("\n🔒 انتهت الفترة التجريبية! يرجى الاشتراك للاستمرار...")
+        
+        def on_activation_success():
+            # 2. إعادة تفعيل الأزرار بعد نجاح الشراء أو إدخال الكود الصحيح
+            self.start_button.configure(state="normal")
+            self.site_menu.configure(state="normal")
+            
+            # فحص حالة زر "نوع العملية" ليعود لشكله الصحيح حسب الموقع المختار
+            self.on_site_change(self.site_var.get())
+            
+            self.focus_force() # إرجاع التركيز للنافذة الرئيسية
+            print("✅ تم التفعيل بنجاح! يمكنك الآن استخدام البرنامج.")
+            
+        # إظهار نافذة التفعيل والدفع
+        license_manager.LicenseDialog(self, on_activation_success)
 
     def on_site_change(self, choice):
         if "Passeport" in choice:
